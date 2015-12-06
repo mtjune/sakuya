@@ -3,6 +3,7 @@ import argparse
 import yaml
 import json
 import time
+import datetime
 import re
 import multiprocessing
 import threading
@@ -17,41 +18,139 @@ from http.client import IncompleteRead
 import six.moves.cPickle as pickle
 from six.moves import queue
 
-import lstm
 
+with open('keys_sakuya.yml', 'r') as f:
+    keys_sakuya = yaml.load(f)
 
-with open('keys_lstmbot.yml', 'r') as f:
-    keys_lstmbot = yaml.load(f)
+with open('config.yml', 'r') as f:
+    config = yaml.load(f)
 
-with open('keys_mtjuney.yml', 'r') as f:
-    keys_mtjuney = yaml.load(f)
-
+# 自分のアカウントのID
+allowed_screen_name = config['allowed_screen_name']
+my_id = config['my_id']
 
 # parser = argparse.ArgumentParser()
 # parser.add_argument('--sample', '-s', default=None, help='')
 # args = parser.parse_args()
 
 
+twitter_api = OAuth1Session(
+    keys_sakuya['CONSUMER_KEY'],
+    client_secret=keys_sakuya['CONSUMER_SECRET'],
+    resource_owner_key=keys_sakuya['ACCESS_TOKEN'],
+    resource_owner_secret=keys_sakuya['ACCESS_SECRET']
+)
 
 
-time_tasks_q = queue.Queue(maxsize=20)
+
+schedule = []
+
+tasks_q = queue.Queue()
+
+
+def tweet(text, reply_data=None):
+    global twitter_api
+
+    params = {}
+
+    if reply_data:
+        params['in_reply_to_status_id'] = reply_data['id']
+        text = '@{} '.format(reply_data['user']['screen_name']) + text
+
+    params['status'] = text
+
+    url = "https://api.twitter.com/1.1/statuses/update.json"
+    res = twitter_api.post(url, params=params)
+
+    return res.status_code
+
+def manage_schedule():
+    global schedule, tasks_q
+
+    while(True):
+        if len(schedule) != 0:
+            if datetime.datetime.now() > schedule[0]['datetime']:
+                tasks_q.put(schedule[0]['task'])
+
+        time.sleep(1)
+
+
+def do_tasks():
+    global tasks_q
+
+    task = tasks_q.get()
+
+    if task == 'aircon_on':
+        # TODO エアコンをONにする処理
+        print("エアコンが付く")
+        tweet('エアコンを付けました')
+
+r_backhome = re.compile(r'([0-9０-９]{1,2})(時|じ).*(かえ|帰)')
+r_call = re.compile(r'(咲|さく|サク)(夜|や|ヤ)')
+
+# 咲夜さんを呼んだか判定
+def is_call(data):
+
+    # 咲夜さんの名前を含むか？
+    f1 = r_call.search(data['text'])
+
+    # 自分のアカウントのツイートか？
+    f2 = data['user']['screen_name'] in allowed_screen_name
+
+    return f1 and f2
+
+
+# sakuyaへのメッセージか判定
+def is_massage(data):
+
+    # 自分へのリプライか？
+    f1 = data['in_reply_to_user_id'] == my_id
+
+    # 自分のアカウントからのリプライか？
+    f2 = data['user']['screen_name'] in allowed_screen_name
+
+    return f1 and f2
+
+
+
+
+# メッセージを解釈して実行(queueに入れる)
+def do_massage(data):
+    global schedule
+
+    filtered_text = re.sub(r'@[a-zA-Z0-9_]{1,15}\s', '', data['text'])
+
+    match = r_backhome.search(filtered_text)
+
+    if not match:
+        return
+
+    backhome_hour = int(match.group(1))
+    backhome_time = datetime.datetime.today().replace(hour=backhome_hour, minute=0, second=0, microsecond=0)
+
+    if backhome_time < datetime.datetime.now():
+        backhome_time += datetime.timedelta(days=1)
+
+    aircon_on_time = backhome_time - datetime.timedelta(minutes=30)
+
+    schedule.append({'datetime': aircon_on_time, 'task':'aircon_on'})
+    schedule = sorted(schedule, key=lambda x:x['datetime'])
+
+    print("{}時{}分にエアコン付けます".format(aircon_on_time.hour, aircon_on_time.minute))
+    reply_status = {'tweet_id': data['id'], 'screen_name': data['user']['screen_name']}
+    text = 'わかりました．{}時{}分にエアコンを付けますので，気をつけてお帰りください．'.format(aircon_on_time.hour, aircon_on_time.minute)
+    res = tweet(text=text, reply_data=data)
+
 
 
 def feed_tweet():
-    global tweet_q, keys_mtjuney
-
-    api = OAuth1Session(
-        keys_mtjuney['CONSUMER_KEY'],
-        client_secret=keys_mtjuney['CONSUMER_SECRET'],
-        resource_owner_key=keys_mtjuney['ACCESS_TOKEN'],
-        resource_owner_secret=keys_mtjuney['ACCESS_SECRET']
-    )
+    global tasks_q, twitter_api
 
     url = 'https://userstream.twitter.com/1.1/user.json'
 
     params = {}
 
-    res = api.get(url, params=params, stream=True)
+    res = twitter_api.get(url, params=params, stream=True)
 
 
     try:
@@ -59,21 +158,29 @@ def feed_tweet():
             if not r:
                 continue
             data = json.loads(r.decode())
+            print(data)
             if 'delete' in data.keys() or 'lang' not in data:
                 pass
-            else:
-                if data['lang'] in ['ja']:
-                    text = data['text']
+            elif 'in_reply_to_user_id' in data.keys() and 'text' in data.keys():
 
-                    if re.match(r'^(RT|@[a-zA-Z0-9]+)', text):
-                        continue
+                if is_massage(data):
+                    do_massage(data)
 
-                    text = re.sub(r'@[a-zA-Z0-9_]{1,15}', '', text)
-                    text = re.sub(r'https?://[\w/:%#\$&\?\(\)~\.=\+\-]+', '', text)
-                    text = re.sub(r'[\n\s]+', ' ', text)
-                    text = text.strip()
-                    if not tweet_q.full():
-                        tweet_q.put(text)
+                elif is_call(data):
+                    tweet('どうしましたか', reply_data=data)
+
+                # if data['lang'] in ['ja']:
+                #     text = data['text']
+                #
+                #     if re.match(r'^(RT|@[a-zA-Z0-9]+)', text):
+                #         continue
+                #
+                #     text = re.sub(r'@[a-zA-Z0-9_]{1,15}', '', text)
+                #     text = re.sub(r'https?://[\w/:%#\$&\?\(\)~\.=\+\-]+', '', text)
+                #     text = re.sub(r'[\n\s]+', ' ', text)
+                #     text = text.strip()
+                #     if not tweet_q.full():
+                #         tweet_q.put(text)
 
     except Exception as e:
         print( '=== エラー内容 ===')
@@ -87,38 +194,17 @@ def feed_tweet():
 
 
 
-def train_tweet():
-    global lstm, tweet_q
-
-    count_train = 1
-    total_time_train = 0.
-    while True:
-
-        tweet_text = tweet_q.get()
-
-        start_at = time.time()
-        lstm.one_tweet_backward(tweet_text)
-        end_at = time.time()
-        total_time_train += (end_at - start_at)
-
-        if count_train % 500 == 0:
-            now_at = time.time()
-            print('trained {} tweet ({} tweet/sec)'.format(count_train, float(count_train) / total_time_train))
-            print('\tqueue_size : {}'.format(tweet_q.qsize()))
-            lstm.save(args.modeloutput)
-            print('\tsaved model as {}'.format(args.modeloutput))
-
-        count_train += 1
-
-
-
-
 if __name__ == '__main__':
-    feeder = threading.Thread(target=feed_tweet)
-    feeder.daemon = True
-    feeder.start()
+    tasker = threading.Thread(target=do_tasks)
+    scheduler = threading.Thread(target=manage_schedule)
+    tasker.daemon = True
+    scheduler.daemon = True
+    tasker.start()
+    scheduler.start()
 
-    train_tweet()
-    feeder.join()
+    feed_tweet()
+
+    tasker.join()
+    scheduler.join()
 
     print('finish!')

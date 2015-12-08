@@ -26,11 +26,12 @@ try:
     GPIO.output(OUTPUT_PIN, 1)
 
 
+
     for i in range(len(pattern[1])):
         GPIO.output(OUTPUT_PIN, 0)
         time.sleep(pattern[1][i])
 
-        if i >= len(pattern[0]):
+        if i < len(pattern[0]):
             GPIO.output(OUTPUT_PIN, 1)
             time.sleep(pattern[0][i])
 

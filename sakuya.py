@@ -18,6 +18,8 @@ from http.client import IncompleteRead
 import six.moves.cPickle as pickle
 from six.moves import queue
 
+import subprocess
+
 
 with open('keys_sakuya.yml', 'r') as f:
     keys_sakuya = yaml.load(f)
@@ -42,11 +44,16 @@ twitter_api = OAuth1Session(
 )
 
 
+# エアコンの電源をON
+def aircon_on():
+    cmd = "irsend SEND_ONCE aircon power_on"
+    subprocess.call(cmd, shell=True)
+
+
 
 schedule = []
 
 tasks_q = queue.Queue()
-
 
 def tweet(text, reply_data=None):
     global twitter_api
@@ -81,7 +88,7 @@ def do_tasks():
     task = tasks_q.get()
 
     if task == 'aircon_on':
-        # TODO エアコンをONにする処理
+        aircon_on()
         print("エアコンが付く")
         tweet('エアコンを付けました')
 

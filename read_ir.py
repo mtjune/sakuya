@@ -56,3 +56,9 @@ finally:
     print("cleanup")
 
     print(pattern)
+    print(len(pattern))
+
+    with open("ir_on.yml", "w") as f:
+        yaml.dump(pattern, f)
+
+    print("saved")

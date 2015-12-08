@@ -36,8 +36,9 @@ try:
 
 
 
-except Exception:
+except Exception as e:
     print("error")
+    print(e)
 
 finally:
     GPIO.cleanup()

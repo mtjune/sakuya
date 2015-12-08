@@ -39,7 +39,7 @@ try:
         GPIO.output(OUTPUT_PIN, 0)
         # time.sleep(pattern[1][i])
         while True:
-            if pattern[1][i] =< time.time() - t_start:
+            if pattern[1][i] <= time.time() - t_start:
                 break
         t_end = time.time()
         pattern_conform[1].append(t_end - t_start)

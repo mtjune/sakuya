@@ -31,10 +31,6 @@ with open('config.yml', 'r') as f:
 allowed_screen_name = config['allowed_screen_name']
 my_id = config['my_id']
 
-# parser = argparse.ArgumentParser()
-# parser.add_argument('--sample', '-s', default=None, help='')
-# args = parser.parse_args()
-
 
 twitter_api = OAuth1Session(
     keys_sakuya['CONSUMER_KEY'],
@@ -176,18 +172,7 @@ def feed_tweet():
                 elif is_call(data):
                     tweet('どうしましたか', reply_data=data)
 
-                # if data['lang'] in ['ja']:
-                #     text = data['text']
-                #
-                #     if re.match(r'^(RT|@[a-zA-Z0-9]+)', text):
-                #         continue
-                #
-                #     text = re.sub(r'@[a-zA-Z0-9_]{1,15}', '', text)
-                #     text = re.sub(r'https?://[\w/:%#\$&\?\(\)~\.=\+\-]+', '', text)
-                #     text = re.sub(r'[\n\s]+', ' ', text)
-                #     text = text.strip()
-                #     if not tweet_q.full():
-                #         tweet_q.put(text)
+
 
     except Exception as e:
         print( '=== エラー内容 ===')

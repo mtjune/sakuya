@@ -19,4 +19,4 @@ except Exception:
     print("error")
 
 finally:
-    GPIO.cloeanup()
+    GPIO.cleanup()

@@ -1,0 +1,14 @@
+
+import RPi.GPIO as GPIO
+import time
+
+INPUT_PIN = 4
+OUTPUT_PIN = 11
+
+GPIO.setmode(GPIO.BOARD)
+GPIO.setup(OUTPUT_PIN, GPIO.OUT)
+while True:
+    GPIO.output(OUTPUT_PIN, True)
+    time.sleep(2)
+    GPIO.output(OUTPUT_PIN, False)
+    time.sleep(2)

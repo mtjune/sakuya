@@ -2,6 +2,7 @@
 import RPi.GPIO as GPIO
 import time
 import yaml
+import math
 
 INPUT_PIN = 18
 OUTPUT_PIN = 12
@@ -16,6 +17,12 @@ pattern = None
 with open("ir_on.yml", "r") as f:
     pattern = yaml.load(f)
 
+
+pattern_conform = {1:[], 0:[]}
+
+t_start = None
+past_signal = 0
+
 try:
     # while True:
     #     GPIO.output(OUTPUT_PIN, True)
@@ -27,13 +34,19 @@ try:
 
 
 
+    t_start = time.time()
     for i in range(len(pattern[1])):
         GPIO.output(OUTPUT_PIN, 0)
         time.sleep(pattern[1][i])
+        t_end = time.time()
+        pattern_conform[1].append(t_end - t_start)
+        t_start = t_end
 
         if i < len(pattern[0]):
             GPIO.output(OUTPUT_PIN, 1)
             time.sleep(pattern[0][i])
+            pattern_conform[0].append(t_end - t_start)
+            t_start = t_end
 
 
 
@@ -44,3 +57,30 @@ except Exception as e:
 finally:
     GPIO.cleanup()
     print("cleanup")
+
+
+pattern_error = {1:[], 0:[]}
+
+error_max1 = 0.
+error_max0 = 0.
+
+for i in range(len(pattern[1])):
+    tmp = math.abs(pattern_conform[1][i] - pattern[1][i])
+    pattern_error.append(tmp)
+    if tmp > error_max1:
+        error_max1 = tmp
+
+for i in range(len(pattern[0])):
+    tmp = math.abs(pattern_conform[0][i] - pattern[0][i])
+    pattern_error.append(tmp)
+    if tmp > error_max0:
+        error_max0 = tmp
+
+print("1", error_max1)
+print("0", error_max0)
+
+
+
+with open("ir_error.yml", "w") as f:
+    yaml.dump(pattern_error, f)
+print("saved")

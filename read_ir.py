@@ -11,7 +11,7 @@ GPIO.setmode(GPIO.BOARD)
 GPIO.setup(INPUT_PIN, GPIO.IN)
 
 
-pattern = []
+pattern = {1: [], 0: []}
 
 
 try:
@@ -33,7 +33,7 @@ try:
             if t_start:
                 t_end = time.time()
                 t = t_end - t_start
-                pattern.append(t)
+                pattern[past_signal].append(t)
                 t_start = t_end
             else:
                 t_start = time.time()
@@ -55,8 +55,9 @@ finally:
     GPIO.cleanup()
     print("cleanup")
 
-    print(pattern)
-    print(len(pattern))
+    print("high {}".format(len(pattern[1])))
+    print("low  {}".format(len(pattern[0])))
+
 
     with open("ir_on.yml", "w") as f:
         yaml.dump(pattern, f)
